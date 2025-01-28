@@ -1,0 +1,6 @@
+Notes on Radars - Thales presentation
+
+RADAR is an acronym for RAdio (transmission and reception of electromagnetic waves in the radio frequency range)
+Detection (detection of objects of interest in the environment) And Ranging (measuring some properties, such as speed).
+
+
