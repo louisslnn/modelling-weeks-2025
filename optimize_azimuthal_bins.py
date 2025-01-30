@@ -2,12 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def amplitude_window(N, window_type="uniform", ripple=30):
-    
     if N < 1:
         return np.array([])
 
     wtype = window_type.lower()
-
     if wtype == "uniform":
         w = np.ones(N)
     elif wtype == "hamming":
@@ -16,15 +14,14 @@ def amplitude_window(N, window_type="uniform", ripple=30):
         w = np.chebwin(N, at=ripple)
     else:
         w = np.ones(N)
+
     return w
 
 def compute_3db_beamwidth(phi_deg, pattern_norm):
-
     if len(phi_deg) < 2:
         return 0.0, 0.0, 0.0, 0.0
 
     max_val = np.max(pattern_norm)
-
     if max_val <= 1e-12:
         return 0.0, 0.0, 0.0, 0.0
 
@@ -32,16 +29,17 @@ def compute_3db_beamwidth(phi_deg, pattern_norm):
     # Indices where pattern >= half of peak
     above_mask = (pattern_norm >= half_val)
     idx = np.where(above_mask)[0]
-    angle_of_max = phi_deg[np.argmax(pattern_norm)]
 
     if len(idx) < 2:
         # If no contiguous region found above -3 dB,
         # fallback: everything collapses to angle_of_max
+        angle_of_max = phi_deg[np.argmax(pattern_norm)]
         return 0.0, angle_of_max, angle_of_max, angle_of_max
 
-    left_3db_edge  = phi_deg[idx[0]]
+    left_3db_edge = phi_deg[idx[0]]
     right_3db_edge = phi_deg[idx[-1]]
     bw = right_3db_edge - left_3db_edge
+    angle_of_max = phi_deg[np.argmax(pattern_norm)]
     return bw, angle_of_max, left_3db_edge, right_3db_edge
 
 def compute_array_factor_intensity(
@@ -51,7 +49,6 @@ def compute_array_factor_intensity(
     window_type="uniform",
     ripple_db=30.0
 ):
-
     if N < 2:
         # Degenerate case
         phi_deg = np.arange(angle_min, angle_max + angle_step, angle_step)
@@ -64,19 +61,20 @@ def compute_array_factor_intensity(
             'right_3db': 0.0,
             'peak_side_lobe': 0.0
         }
-
         return phi_deg, pattern_norm, info
 
     # Spacing and wavenumber
     d = 4.0 / (N - 1)
     lam = c / f
-    k   = 2.0 * np.pi / lam
+    k = 2.0 * np.pi / lam
+
     delta_phi_rads = np.radians(delta_phi_deg)
     w = amplitude_window(N, window_type=window_type, ripple=ripple_db)
+
     phi_deg = np.arange(angle_min, angle_max + angle_step, angle_step)
     phi_rad = np.radians(phi_deg)
-    AF = np.zeros_like(phi_rad, dtype=complex)
 
+    AF = np.zeros_like(phi_rad, dtype=complex)
     for i, phi in enumerate(phi_rad):
         beta = k * d * np.sin(phi) + delta_phi_rads
         s = 0.0j
@@ -92,7 +90,7 @@ def compute_array_factor_intensity(
 
     # Some lobe info
     max_gain = peak_val
-    idx_max  = np.argmax(pattern)
+    idx_max = np.argmax(pattern)
     direction_of_max = phi_deg[idx_max]
     HPBW, main_ang, left_3db, right_3db = compute_3db_beamwidth(phi_deg, pattern_norm)
 
@@ -110,7 +108,6 @@ def compute_array_factor_intensity(
         'right_3db': right_3db,
         'peak_side_lobe': peak_side_lobe,
     }
-
     return phi_deg, pattern_norm, info
 
 def compute_array_factor_by_angle(
@@ -121,8 +118,9 @@ def compute_array_factor_by_angle(
     ripple_db=30.0
 ):
     lam = c / f
-    d   = 4.0 / (N - 1)
-    k   = 2.0 * np.pi / lam
+    d = 4.0 / (N - 1)
+    k = 2.0 * np.pi / lam
+    # Convert the steering angle (in deg) to the needed phase shift in degrees.
     delta_phi_deg = - np.degrees(k * d * np.sin(np.radians(steering_angle_deg)))
 
     return compute_array_factor_intensity(
@@ -141,7 +139,6 @@ def find_mainlobe_for_center(
     max_iter=5
 ):
     center = guess_center_deg
-
     for _ in range(max_iter):
         _, _, info = compute_array_factor_by_angle(
             N, frequency, c,
@@ -150,10 +147,9 @@ def find_mainlobe_for_center(
             window_type=window_type,
             ripple_db=ripple_db
         )
-
         dom = info["direction_of_max"]
-        if abs(dom - center) < 0.01:
-            # close enough
+        if abs(dom - center) < 0.1:
+            # Close enough
             break
         center = dom
 
@@ -165,7 +161,6 @@ def find_mainlobe_for_center(
         window_type=window_type,
         ripple_db=ripple_db
     )
-
     return center, info
 
 def find_optimal_scan_bins(
@@ -183,8 +178,9 @@ def find_optimal_scan_bins(
     EPS = 1e-3
 
     while coverage_left < angle_max - EPS:
-        # For each bin, guess some center a couple deg to the right
+        # For each beam, guess some center a couple deg to the right
         guess = coverage_left + 2.0
+
         # Snap the main lobe to that guess
         center, info = find_mainlobe_for_center(
             guess, N, frequency, c,
@@ -193,21 +189,20 @@ def find_optimal_scan_bins(
         )
         left_3db = info["left_3db"]
         right_3db = info["right_3db"]
-        # Local search around that center so left_3db ~ coverage_left
 
-        def coverage_gap(bin_center):
+        # Local search around that center so left_3db ~ coverage_left
+        def coverage_gap(beam_center):
             _, info2 = find_mainlobe_for_center(
-                bin_center, N, frequency, c,
+                beam_center, N, frequency, c,
                 angle_min, angle_max, angle_step,
                 window_type, ripple_db
             )
-
             return info2["left_3db"] - coverage_left
 
         best_center = center
         best_gap = abs(left_3db - coverage_left)
-        test_angles = np.arange(center - 2.0, center + 2.0, 0.2)
 
+        test_angles = np.arange(center - 2.0, center + 2.0, 0.05)
         for a in test_angles:
             gap_val = coverage_gap(a)
             if abs(gap_val) < best_gap:
@@ -224,7 +219,6 @@ def find_optimal_scan_bins(
         right_3db = infoC["right_3db"]
 
         # If left_3db > coverage_left, shift coverage_left
-
         if left_3db > coverage_left + EPS:
             coverage_left = left_3db
 
@@ -233,34 +227,32 @@ def find_optimal_scan_bins(
 
     return bins
 
+# ------------------------- MAIN DEMO -------------------------
 if __name__ == "__main__":
     # Parameters
-    angle_min   = -45
-    angle_max   =  45
-    N           = 40           # Number of elements
-    frequency   = 1.2e9        # 1.2 GHz
-    c           = 3e8
-    window_type = "uniform"    # Could be 'uniform','chebyshev','hamming'
-    ripple_db   = 30.0         # Used if Chebyshev
-    angle_step  = 0.1
+    angle_min = -45
+    angle_max = 45
+    N = 40  # Number of elements
+    frequency = 1.2e9  # 1.2 GHz
+    c = 3e8
+    window_type = "uniform"  # Could be 'uniform','chebyshev','hamming'
+    ripple_db = 30.0  # Used if Chebyshev
+    angle_step = 0.1
 
-    # 1) Get the list of bin centers from -3 dB tiling
-
-    bin_centers = find_optimal_scan_bins(
+    # 1) Get the list of beam centers from -3 dB tiling
+    beam_centers = find_optimal_scan_bins(
         angle_min, angle_max,
         N, frequency, c=c,
         window_type=window_type,
         ripple_db=ripple_db,
         angle_step=angle_step
     )
-    print("bin centers:", bin_centers)
-    print(f"Number of bins = {len(bin_centers)}")
+    print("Beam centers:", beam_centers)
+    print(f"Number of beams = {len(beam_centers)}")
 
-    # 2) Plot each bin pattern in dB
-
-    plt.figure(figsize=(8,5))
-
-    for center in bin_centers:
+    # 2) Plot each beam pattern in dB
+    plt.figure(figsize=(8, 5))
+    for center in beam_centers:
         phi_deg, patt_norm, info = compute_array_factor_by_angle(
             N, frequency, c,
             angle_min, angle_max, angle_step,
@@ -270,7 +262,9 @@ if __name__ == "__main__":
         )
         patt_dB = 10.0 * np.log10(np.maximum(patt_norm, 1e-12))
         plt.plot(phi_deg, patt_dB, label=f"{center:.1f}°")
-
+        plt.plot([-45, 45], [-3, -3], "r")
+        plt.ylim(-15, 3)
+    
     plt.xlabel("Azimuth angle (deg)")
     plt.ylabel("Normalized |AF|^2 (dB)")
     plt.title("Array Patterns with -3 dB Tiling")
@@ -278,11 +272,9 @@ if __name__ == "__main__":
     plt.legend(loc="upper right", fontsize="small")
     plt.show()
 
-    # 3) Show the -3 dB coverage intervals for each bin
-
-    plt.figure(figsize=(7,5))
-
-    for i, center in enumerate(bin_centers):
+    # 3) Show the -3 dB coverage intervals for each beam
+    plt.figure(figsize=(7, 5))
+    for i, center in enumerate(beam_centers):
         _, _, info = compute_array_factor_by_angle(
             N, frequency, c,
             angle_min, angle_max, angle_step,
@@ -295,8 +287,10 @@ if __name__ == "__main__":
         y_val = i
         plt.plot([left_3db, right_3db], [y_val, y_val], 'b-', lw=2)
         plt.plot(center, y_val, 'ro')
+
     plt.xlabel("Azimuth angle (deg)")
-    plt.ylabel("Bin index")
-    plt.title("3 dB Coverage of Each Bin")
+    plt.ylabel("Beam index")
+    plt.title("3 dB Coverage of Each Beam")
     plt.grid(True)
     plt.show()
+
