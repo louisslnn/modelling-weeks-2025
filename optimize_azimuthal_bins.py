@@ -812,7 +812,7 @@ def compute_pattern_full(N=40, freq_hz=1.2e9, delta_phi=0.0, array_len=4.0, do_s
     d = array_len / (N - 1) if N > 1 else 0.0
 
     # Create a high-resolution angle grid from -90° to 90°
-    full_phi_deg = np.linspace(-90, 90, 10000)
+    full_phi_deg = np.linspace(-90, 90, 4000)
     full_phi_rad = np.radians(full_phi_deg)
 
     # Compute the array factor for each angle
